@@ -1,7 +1,7 @@
       
 # Audio Review and Preprocessing Tool
 
-A graphical tool built with Python and Tkinter to facilitate the review, sorting, filtering, and batch processing of audio datasets, particularly those generated or analyzed using tools like Facebook's AudioBox or similar methods that produce per-file quality/metric scores.
+A graphical tool built with Python and Tkinter to facilitate the review, sorting, filtering, and batch processing of audio datasets, particularly with analysis using tools like Facebook's AudioBox (https://github.com/facebookresearch/audiobox-aesthetics) or similar methods that produce per-file quality/metric scores.
 
 This tool helps manage large audio datasets by providing:
 *   A sortable and filterable table view of audio files and their associated scores (e.g., CE, CU, PC, PQ).
