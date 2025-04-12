@@ -9,8 +9,8 @@ This tool helps manage large audio datasets by providing:
 *   Batch preprocessing capabilities using an external command (like `audio-aes`).
 *   Options to export selected audio files (concatenated) or just their file paths for use in training scripts.
 
-![Screenshot Placeholder](screenshot.png)
-*(Suggestion: Add a screenshot of the application here)*
+![Screenshot](screenshot.png)
+
 
 ## Features
 
