@@ -274,7 +274,7 @@ class AudioReviewApp(tk.Tk):
         self.current_sort_reverse = False
         self.selected_directory = tk.StringVar()
         self.audio_aes_command = tk.StringVar(value='audio-aes') # Default command name
-        self.audio_aes_batch_size = tk.IntVar(value=100)
+        self.audio_aes_batch_size = tk.IntVar(value=10)
         self.preprocess_overwrite = tk.BooleanVar(value=False) # Skip existing by default
 
         # Threading communication
