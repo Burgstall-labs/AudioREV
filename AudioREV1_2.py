@@ -33,7 +33,7 @@ def find_ffmpeg():
 
 FFMPEG_AVAILABLE = find_ffmpeg()
 
-def load_audio_data(base_dir, search_subdirs):
+def load_audio_data(base_dir, search_subdirs, update_status_callback):
     """
     Loads audio paths and scores from subdirectories of base_dir.
     Looks for paths.jsonl and scores.jsonl in each immediate subdirectory.
@@ -46,13 +46,8 @@ def load_audio_data(base_dir, search_subdirs):
     found_files_flag = False
     subdirs_scanned = 0
     invalid_entries_count = 0
-
-    def _update_status_callback(message):
-        """Helper callback to safely update the GUI status from load_audio_data."""
-        if hasattr(self, '_update_status'):  # Check if the method exists (if running in app context)
-            self._update_status(message)
-        print(message)  # Print to console anyway
-
+    
+    
     if search_subdirs:
         for item in os.listdir(base_dir):
             subdir_path = os.path.join(base_dir, item)
@@ -61,10 +56,10 @@ def load_audio_data(base_dir, search_subdirs):
                 paths_file = os.path.join(subdir_path, PATHS_FILENAME)
                 scores_file = os.path.join(subdir_path, SCORES_FILENAME)
                 
-                if subdirs_scanned == 1:
-                    _update_status_callback(f"Found {len(os.listdir(base_dir))} subdirectories. Scanning...")
+                if subdirs_scanned == 1: 
+                    update_status_callback(f"Found {len(os.listdir(base_dir))} subdirectories. Scanning...")
 
-                _update_status_callback(f"Loading data from subdirectory: {item}")
+                update_status_callback(f"Loading data from subdirectory: {item}")
 
                 if os.path.exists(paths_file) and os.path.exists(scores_file):
                     found_files_flag = True
@@ -119,7 +114,7 @@ def load_audio_data(base_dir, search_subdirs):
                         print(f"    Error processing subdirectory {item}: {e}\n{traceback.format_exc()}")
                         invalid_entries_count += 1 # Count errors during processing as invalid
 
-                _update_status_callback(f"Finished processing files in subdirectory: {item}")
+                update_status_callback(f"Finished processing files in subdirectory: {item}")
     else:
         paths_file = os.path.join(base_dir, PATHS_FILENAME)
         scores_file = os.path.join(base_dir, SCORES_FILENAME)
@@ -173,7 +168,7 @@ def load_audio_data(base_dir, search_subdirs):
                 invalid_entries_count += 1
 
     print(f"Finished scanning {subdirs_scanned} subdirectories.")
-    _update_status_callback(f"Finished scanning {subdirs_scanned} subdirectories.")
+    update_status_callback(f"Finished scanning {subdirs_scanned} subdirectories.")
     if invalid_entries_count > 0:
         print(f"Encountered {invalid_entries_count} invalid/missing entries during loading.")
 
@@ -654,7 +649,7 @@ class AudioReviewApp(tk.Tk):
 
         start_time = time.time()
         try:
-            loaded_data, error_msg, subdir_count = load_audio_data(directory, self.search_subdirs.get())
+            loaded_data, error_msg, subdir_count = load_audio_data(directory, self.search_subdirs.get(), self._update_status)
             load_time = time.time() - start_time
 
             if loaded_data and len(loaded_data) > 100000:
