@@ -38,6 +38,7 @@ def load_audio_data(base_dir):
     Loads audio paths and scores from subdirectories of base_dir.
     Looks for paths.jsonl and scores.jsonl in each immediate subdirectory.
     """
+    mid_word_data = {}
     all_data = []
     if not base_dir or not os.path.isdir(base_dir):
         return [], "Selected path is not a valid directory.", 0
@@ -85,7 +86,6 @@ def load_audio_data(base_dir):
                         full_path_str = path_data.get("path")
                         if not full_path_str:
                             # Add filtering features for mid-sentence audio clips
-                            mid_word_data = detect_mid_word_clips(full_path_str)
                             mid_word_data["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
 
                             print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
@@ -108,6 +108,7 @@ def load_audio_data(base_dir):
                             'CU': score_data.get('CU', None),
                             'PC': score_data.get('PC', None),
                             'PQ': score_data.get('PQ', None),
+                            **detect_mid_word_clips(full_path_str),
                             **mid_word_data,
                             "audio_length_seconds": mid_word_data.get("audio_length_seconds"),
 
