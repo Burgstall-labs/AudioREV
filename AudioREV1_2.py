@@ -134,10 +134,10 @@ def load_audio_data(base_dir, search_subdirs):
                 else:
                     for path_data, score_data in zip(paths_content, scores_content):
                         full_path_str = path_data.get("path")
-                        if not full_path_str:
                         full_path = Path(full_path_str)
-                        if not full_path.is_file():
-                            print(f"    Warning: Path '{full_path_str}' from {paths_file} not found on disk. Skipping.")
+                        
+                        if not full_path_str:
+                            print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
                             invalid_entries_count += 1
                             continue
 
@@ -149,6 +149,11 @@ def load_audio_data(base_dir, search_subdirs):
                             'PC': score_data.get('PC', None),
                             'PQ': score_data.get('PQ', None),
                         }
+
+                        if not full_path.is_file():
+                             print(f"    Warning: Path '{full_path_str}' from {paths_file} not found on disk. Skipping.")
+                             invalid_entries_count += 1
+                             continue
                         all_data.append(entry)
             except Exception as e:
                 print(f"    Error processing directory: {e}\n{traceback.format_exc()}")
