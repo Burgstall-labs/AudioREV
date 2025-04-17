@@ -38,7 +38,6 @@ def load_audio_data(base_dir, search_subdirs):
     Loads audio paths and scores from subdirectories of base_dir.
     Looks for paths.jsonl and scores.jsonl in each immediate subdirectory.
     """
-    mid_word_data = {}
     all_data = []
     if not base_dir or not os.path.isdir(base_dir): 
         return [], "Selected path is not a valid directory.", 0
@@ -88,11 +87,6 @@ def load_audio_data(base_dir, search_subdirs):
                             if not full_path_str:
                                 print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
                                 invalid_entries_count += 1
-                                mid_word_data["audio_length_seconds"] = 0
-                            else:
-                                mid_word_data["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
-
-                            # Use Path object for robust handling
                             full_path = Path(full_path_str)
 
                             # Check if the file *actually* exists before adding
@@ -108,10 +102,6 @@ def load_audio_data(base_dir, search_subdirs):
                                 'CU': score_data.get('CU', None),
                                 'PC': score_data.get('PC', None),
                                 'PQ': score_data.get('PQ', None),
-                                **detect_mid_word_clips(full_path_str),
-                                **mid_word_data,
-                                "audio_length_seconds": mid_word_data.get("audio_length_seconds"),
-
                             }
                             all_data.append(entry)
                     except Exception as e:
@@ -145,11 +135,6 @@ def load_audio_data(base_dir, search_subdirs):
                     for path_data, score_data in zip(paths_content, scores_content):
                         full_path_str = path_data.get("path")
                         if not full_path_str:
-                            mid_word_data["audio_length_seconds"] = 0
-                            print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
-                            invalid_entries_count += 1
-                        else:
-                            mid_word_data["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
                         full_path = Path(full_path_str)
                         if not full_path.is_file():
                             print(f"    Warning: Path '{full_path_str}' from {paths_file} not found on disk. Skipping.")
@@ -163,9 +148,6 @@ def load_audio_data(base_dir, search_subdirs):
                             'CU': score_data.get('CU', None),
                             'PC': score_data.get('PC', None),
                             'PQ': score_data.get('PQ', None),
-                            **detect_mid_word_clips(full_path_str),
-                            **mid_word_data,
-                            "audio_length_seconds": mid_word_data.get("audio_length_seconds"),
                         }
                         all_data.append(entry)
             except Exception as e:
@@ -184,6 +166,29 @@ def load_audio_data(base_dir, search_subdirs):
     print(f"Loaded {len(all_data)} audio entries.")
     return all_data, None, subdirs_scanned # Return data, no error message, count
 
+def add_audio_features(audio_data):
+    """
+    Calculates and adds audio length and mid-word detection data to entries.
+    Modifies the audio_data list in place.
+    """
+    for entry in audio_data:
+        full_path_str = entry["path"]
+        try:
+            entry["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
+        except Exception as e:
+            print(f"    Error getting duration for {full_path_str}: {e}")
+            entry["audio_length_seconds"] = 0
+
+        try:
+            entry.update(detect_mid_word_clips(full_path_str))
+        except Exception as e:
+            print(f"    Error in mid-word detection for {full_path_str}: {e}")
+            entry.update({
+                "starts_mid_word": False,
+                "ends_mid_word": False,
+                "confidence": {"start": 0, "end": 0},
+            })
+    return audio_data
 
 def create_wav_jsonl(target_dir, output_filename="paths.jsonl", progress_callback=None):
     """
@@ -511,6 +516,8 @@ class AudioReviewApp(tk.Tk):
         self.search_subdirs = tk.BooleanVar(value=True); subdirs_check = ttk.Checkbutton(top_frame, text="Data is in subdirectories", variable=self.search_subdirs); subdirs_check.pack(side=tk.LEFT, padx=5)
         load_button = ttk.Button(top_frame, text="Load Data", command=self.load_and_display_data)
         load_button.pack(side=tk.LEFT, padx=5)
+        analyze_button = ttk.Button(top_frame, text="Analyze Audio Features", command=self.analyze_features)
+        analyze_button.pack(side=tk.LEFT, padx=5)
         preprocess_button = ttk.Button(top_frame, text="Preprocess Options...", command=self.run_preprocessing_thread)
         preprocess_button.pack(side=tk.LEFT, padx=5)
 
@@ -650,6 +657,50 @@ class AudioReviewApp(tk.Tk):
             messagebox.showerror("Loading Failed", f"An unexpected error occurred during data loading:\n{e}\n\n{traceback.format_exc()}")
             print(f"CRITICAL LOADING ERROR: {e}\n{traceback.format_exc()}")
 
+    def analyze_features(self):
+        """
+        Adds audio features (duration, mid-word) to the currently displayed data.
+        """
+        if not self.display_audio_data:
+            messagebox.showinfo("No Data", "No data loaded or visible. Please load and filter data first.", parent=self)
+            return
+
+        self._update_status("Analyzing audio features...")
+        self.update_idletasks()  # Force GUI update
+
+        analysis_start_time = time.time()
+        try:
+            self.display_audio_data = add_audio_features(self.display_audio_data)
+            analysis_time = time.time() - analysis_start_time
+            self.populate_treeview() # Refresh the treeview to show new data
+            self._update_status(f"Audio feature analysis completed in {analysis_time:.2f} seconds.  Data updated.")
+        except Exception as e:
+            self._update_status("Error during audio feature analysis.")
+            messagebox.showerror("Analysis Error", f"An error occurred during analysis: {e}\n{traceback.format_exc()}", parent=self)
+            print(f"ANALYSIS ERROR: {e}\n{traceback.format_exc()}")
+
+    def analyze_features(self):
+        """
+        Adds audio features (duration, mid-word) to the currently displayed data.
+        """
+        if not self.display_audio_data:
+            messagebox.showinfo("No Data", "No data loaded or visible. Please load and filter data first.", parent=self)
+            return
+
+        self._update_status("Analyzing audio features...")
+        self.update_idletasks()  # Force GUI update
+
+        analysis_start_time = time.time()
+        try:
+            self.display_audio_data = add_audio_features(self.display_audio_data)
+            analysis_time = time.time() - analysis_start_time
+            self.populate_treeview() # Refresh the treeview to show new data
+            self._update_status(f"Audio feature analysis completed in {analysis_time:.2f} seconds.  Data updated.")
+        except Exception as e:
+            self._update_status("Error during audio feature analysis.")
+            messagebox.showerror("Analysis Error", f"An error occurred during analysis: {e}\n{traceback.format_exc()}", parent=self)
+            print(f"ANALYSIS ERROR: {e}\n{traceback.format_exc()}")
+
     def _parse_filter_value(self, value_str):
         """ Helper to parse float filter values, returns None if invalid/empty. """
         if not value_str.strip(): return None
@@ -741,10 +792,11 @@ class AudioReviewApp(tk.Tk):
                 cu_val = f"{entry['CU']:.4f}" if entry['CU'] is not None else "N/A"
                 pc_val = f"{entry['PC']:.4f}" if entry['PC'] is not None else "N/A"
                 pq_val = f"{entry['PQ']:.4f}" if entry['PQ'] is not None else "N/A"
-                starts_mid_word = "Yes" if entry["starts_mid_word"] else "No"
-                ends_mid_word = "Yes" if entry["ends_mid_word"] else "No"
+                starts_mid_word = "Yes" if entry.get("starts_mid_word",False) else "No"  # Use get() with default
+                ends_mid_word = "Yes" if entry.get("ends_mid_word",False) else "No"      # to handle missing keys
+                length = entry.get("audio_length_seconds", 0) # Default to 0 if not yet analyzed
                 items_to_insert.append(
-                    ('', tk.END, entry['path'], {'values': (entry['filename'], ce_val, cu_val, pc_val, pq_val, starts_mid_word, ends_mid_word, entry['audio_length_seconds'], entry['path'])})
+                    ('', tk.END, entry['path'], {'values': (entry['filename'], ce_val, cu_val, pc_val, pq_val, starts_mid_word, ends_mid_word, length, entry['path'])})
                  )
 
             for parent, index, iid, options in items_to_insert:
