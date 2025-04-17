@@ -454,7 +454,7 @@ class AudioReviewApp(tk.Tk):
         
 
     def _parse_filter_value(self, value_str):
-        if not value_str.strip(): return None
+        if not value_str or not value_str.strip(): return None
         try:
             return float(value_str)
         except ValueError:
@@ -740,14 +740,14 @@ class AudioReviewApp(tk.Tk):
         self.update_idletasks()
 
         filter_filename_str = self.filter_filename.get().lower().strip()
-        pq_min = self._parse_filter_value(self.filter_pq_min.get()); pq_max = self._parse_filter_value(self.filter_pq_max.get())
-        ce_min = self._parse_filter_value(self.filter_ce_min.get()); ce_max = self._parse_filter_value(self.filter_ce_max.get())
-        cu_min = self._parse_filter_value(self.filter_cu_min.get()); cu_max = self._parse_filter_value(self.filter_cu_max.get())
-        pc_min = self._parse_filter_value(self.filter_pc_min.get()); pc_max = self._parse_filter_value(self.filter_pc_max.get())
-        length_min = self._parse_filter_value(self.filter_length_min.get()); length_max = self._parse_filter_value(self.filter_length_max.get())
+        pq_min = self._parse_filter_value(self.filter_pq_min.get()); pq_max = self._parse_filter_value(self.filter_pq_max.get()) 
+        ce_min = self._parse_filter_value(self.filter_ce_min.get()); ce_max = self._parse_filter_value(self.filter_ce_max.get()) 
+        cu_min = self._parse_filter_value(self.filter_cu_min.get()); cu_max = self._parse_filter_value(self.filter_cu_max.get()) 
+        pc_min = self._parse_filter_value(self.filter_pc_min.get()); pc_max = self._parse_filter_value(self.filter_pc_max.get()) 
+        length_min = self._parse_filter_value(self.filter_length_min.get()); length_max = self._parse_filter_value(self.filter_length_max.get()) 
         starts_mid_word_filter = self.filter_mid_word_start_var.get()
         ends_mid_word_filter = self.filter_mid_word_end_var.get()
-
+        
         if pq_min is not None and pq_max is not None and pq_min > pq_max: messagebox.showwarning("Filter Warning", "PQ min value is greater than max value.", parent=self); return
         if ce_min is not None and ce_max is not None and ce_min > ce_max: messagebox.showwarning("Filter Warning", "CE min value is greater than max value.", parent=self); return
         if cu_min is not None and cu_max is not None and cu_min > cu_max: messagebox.showwarning("Filter Warning", "CU min value is greater than max value.", parent=self); return
@@ -783,7 +783,6 @@ class AudioReviewApp(tk.Tk):
             self._update_status("Error applying filters.")
             messagebox.showerror("Filter Error", f"An unexpected error occurred during filtering:\n{e}\n\n{traceback.format_exc()}")
             print(f"FILTERING ERROR: {e}\n{traceback.format_exc()}")
-
 
     def clear_filters(self):
         """ Clears filter entry fields and reapplies (showing all data or respecting previous full load). """
