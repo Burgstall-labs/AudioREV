@@ -450,6 +450,15 @@ class AudioReviewApp(tk.Tk):
         self.current_sort_reverse = False
         self.selected_directory = tk.StringVar()
         self.audio_aes_command = tk.StringVar(value='audio-aes')
+        
+        
+
+    def _parse_filter_value(self, value_str):
+        if not value_str.strip(): return None
+        try:
+            return float(value_str)
+        except ValueError:
+            return None
         self.audio_aes_batch_size = tk.IntVar(value=10) # <<< Set safer default batch size
         self.preprocess_overwrite = tk.BooleanVar(value=False)
 
@@ -739,8 +748,6 @@ class AudioReviewApp(tk.Tk):
         starts_mid_word_filter = self.filter_mid_word_start_var.get()
         ends_mid_word_filter = self.filter_mid_word_end_var.get()
 
-        def _parse_filter_value(self, value_str):
-            if not value_str.strip(): return None
         if pq_min is not None and pq_max is not None and pq_min > pq_max: messagebox.showwarning("Filter Warning", "PQ min value is greater than max value.", parent=self); return
         if ce_min is not None and ce_max is not None and ce_min > ce_max: messagebox.showwarning("Filter Warning", "CE min value is greater than max value.", parent=self); return
         if cu_min is not None and cu_max is not None and cu_min > cu_max: messagebox.showwarning("Filter Warning", "CU min value is greater than max value.", parent=self); return
