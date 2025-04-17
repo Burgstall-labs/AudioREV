@@ -730,9 +730,6 @@ class AudioReviewApp(tk.Tk):
             messagebox.showerror("Analysis Error", f"An error occurred during analysis: {e}\n{traceback.format_exc()}", parent=self)
             print(f"ANALYSIS ERROR: {e}\n{traceback.format_exc()}")
 
-    def analyze_features(self):
-        """
-
     def apply_filters(self):
         """ Filters self.full_audio_data into self.display_audio_data based on GUI filter criteria and updates Treeview. """
         self._update_status("Applying filters...")
