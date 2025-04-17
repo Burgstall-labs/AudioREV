@@ -33,14 +33,14 @@ def find_ffmpeg():
 
 FFMPEG_AVAILABLE = find_ffmpeg()
 
-def load_audio_data(base_dir):
+def load_audio_data(base_dir, search_subdirs):
     """
     Loads audio paths and scores from subdirectories of base_dir.
     Looks for paths.jsonl and scores.jsonl in each immediate subdirectory.
     """
     mid_word_data = {}
     all_data = []
-    if not base_dir or not os.path.isdir(base_dir):
+    if not base_dir or not os.path.isdir(base_dir): 
         return [], "Selected path is not a valid directory.", 0
 
     print(f"Scanning directory: {base_dir}")
@@ -48,75 +48,137 @@ def load_audio_data(base_dir):
     subdirs_scanned = 0
     invalid_entries_count = 0
 
-    for item in os.listdir(base_dir):
-        subdir_path = os.path.join(base_dir, item)
-        if os.path.isdir(subdir_path):
-            subdirs_scanned += 1
-            paths_file = os.path.join(subdir_path, PATHS_FILENAME)
-            scores_file = os.path.join(subdir_path, SCORES_FILENAME)
+    if search_subdirs:
+      for item in os.listdir(base_dir):
+          subdir_path = os.path.join(base_dir, item)
+          if os.path.isdir(subdir_path):
+              subdirs_scanned += 1
+              paths_file = os.path.join(subdir_path, PATHS_FILENAME)
+              scores_file = os.path.join(subdir_path, SCORES_FILENAME)
 
-            if os.path.exists(paths_file) and os.path.exists(scores_file):
-                found_files_flag = True
-                try:
-                    paths_content = []
-                    scores_content = []
-                    # Read paths file line by line, handling potential errors
-                    with open(paths_file, 'r', encoding='utf-8') as pf:
-                         for line_num, line in enumerate(pf):
-                             try:
-                                 paths_content.append(json.loads(line))
-                             except json.JSONDecodeError:
-                                 print(f"    Warning: Skipping invalid JSON line {line_num+1} in {paths_file}: {line.strip()}")
-                                 invalid_entries_count += 1
-                    # Read scores file line by line
-                    with open(scores_file, 'r', encoding='utf-8') as sf:
-                         for line_num, line in enumerate(sf):
-                             try:
-                                 scores_content.append(json.loads(line))
-                             except json.JSONDecodeError:
-                                 print(f"    Warning: Skipping invalid JSON line {line_num+1} in {scores_file}: {line.strip()}")
-                                 # Avoid double counting if both files have issues on same conceptual line
-                                 # invalid_entries_count += 1
+              if os.path.exists(paths_file) and os.path.exists(scores_file):
+                  found_files_flag = True
+                  try:
+                      paths_content = []
+                      scores_content = []
+                      # Read paths file line by line, handling potential errors
+                      with open(paths_file, 'r', encoding='utf-8') as pf:
+                           for line_num, line in enumerate(pf):
+                               try:
+                                   paths_content.append(json.loads(line))
+                               except json.JSONDecodeError:
+                                   print(f"    Warning: Skipping invalid JSON line {line_num+1} in {paths_file}: {line.strip()}")
+                                   invalid_entries_count += 1
+                      # Read scores file line by line
+                      with open(scores_file, 'r', encoding='utf-8') as sf:
+                           for line_num, line in enumerate(sf):
+                               try:
+                                   scores_content.append(json.loads(line))
+                               except json.JSONDecodeError:
+                                   print(f"    Warning: Skipping invalid JSON line {line_num+1} in {scores_file}: {line.strip()}")
+                                   # Avoid double counting if both files have issues on same conceptual line
+                                   # invalid_entries_count += 1
 
-                    if len(paths_content) != len(scores_content):
-                        print(f"    Warning: Mismatch in valid line count between {paths_file} ({len(paths_content)}) and {scores_file} ({len(scores_content)}). Skipping this subdirectory.")
-                        continue
+                      if len(paths_content) != len(scores_content):
+                          print(f"    Warning: Mismatch in valid line count between {paths_file} ({len(paths_content)}) and {scores_file} ({len(scores_content)}). Skipping this subdirectory.")
+                          continue
 
-                    for path_data, score_data in zip(paths_content, scores_content):
-                        full_path_str = path_data.get("path")
-                        if not full_path_str:
-                            # Add filtering features for mid-sentence audio clips
-                            mid_word_data["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
+                      for path_data, score_data in zip(paths_content, scores_content):
+                          full_path_str = path_data.get("path")
+                          if not full_path_str:
+                              print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
+                              invalid_entries_count += 1
+                              mid_word_data["audio_length_seconds"] = 0
+                              
+                              
+                          elif full_path_str:
+                             mid_word_data["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
+                              continue
 
-                            print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
-                            invalid_entries_count += 1
-                            continue
+                          # Use Path object for robust handling
+                          full_path = Path(full_path_str)
 
-                        # Use Path object for robust handling
-                        full_path = Path(full_path_str)
+                          # Check if the file *actually* exists before adding
+                          if not full_path.is_file():
+                              print(f"    Warning: Path '{full_path_str}' from {paths_file} not found on disk. Skipping.")
+                              invalid_entries_count += 1
+                              continue
 
-                        # Check if the file *actually* exists before adding
-                        if not full_path.is_file():
-                            print(f"    Warning: Path '{full_path_str}' from {paths_file} not found on disk. Skipping.")
-                            invalid_entries_count += 1
-                            continue
+                          entry = {
+                              'filename': full_path.name,
+                              'path': str(full_path), # Store standard string path
+                              'CE': score_data.get('CE', None),
+                              'CU': score_data.get('CU', None),
+                              'PC': score_data.get('PC', None),
+                              'PQ': score_data.get('PQ', None),
+                              **detect_mid_word_clips(full_path_str),
+                              **mid_word_data,
+                              "audio_length_seconds": mid_word_data.get("audio_length_seconds"),
 
-                        entry = {
-                            'filename': full_path.name,
-                            'path': str(full_path), # Store standard string path
-                            'CE': score_data.get('CE', None),
-                            'CU': score_data.get('CU', None),
-                            'PC': score_data.get('PC', None),
-                            'PQ': score_data.get('PQ', None),
-                            **detect_mid_word_clips(full_path_str),
-                            **mid_word_data,
-                            "audio_length_seconds": mid_word_data.get("audio_length_seconds"),
+                          }
+                          all_data.append(entry)
+                  except Exception as e:
+                      print(f"    Error processing subdirectory {item}: {e}\n{traceback.format_exc()}")
+                      invalid_entries_count += 1 # Count errors during processing as invalid
+    else:
+        paths_file = os.path.join(base_dir, PATHS_FILENAME)
+        scores_file = os.path.join(base_dir, SCORES_FILENAME)
 
-                        }
-                        all_data.append(entry)
-                except Exception as e:
-                    print(f"    Error processing subdirectory {item}: {e}\n{traceback.format_exc()}")
-                    invalid_entries_count += 1 # Count errors during processing as invalid
+        if os.path.exists(paths_file) and os.path.exists(scores_file):
+           found_files_flag = True
+           try:
+              paths_content, scores_content = [],[]
+              with open(paths_file, 'r', encoding='utf-8') as pf:
+                   for line_num, line in enumerate(pf):
+                       try:
+                           paths_content.append(json.loads(line))
+                       except json.JSONDecodeError:
+                           print(f"    Warning: Skipping invalid JSON line {line_num+1} in {paths_file}: {line.strip()}")
+                           invalid_entries_count += 1
+              with open(scores_file, 'r', encoding='utf-8') as sf:
+                   for line_num, line in enumerate(sf):
+                       try:
+                           scores_content.append(json.loads(line))
+                       except json.JSONDecodeError:
+                           print(f"    Warning: Skipping invalid JSON line {line_num+1} in {scores_file}: {line.strip()}")
+
+              if len(paths_content) != len(scores_content):
+                  print(f"    Warning: Mismatch in valid line count between {paths_file} ({len(paths_content)}) and {scores_file} ({len(scores_content)}). Skipping this subdirectory.")
+              else:
+                  for path_data, score_data in zip(paths_content, scores_content):
+                      full_path_str = path_data.get("path")
+                      if not full_path_str:
+                          mid_word_data["audio_length_seconds"] = 0
+
+                          print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
+                          invalid_entries_count += 1
+                      elif full_path_str:
+                          mid_word_data["audio_length_seconds"] = librosa.get_duration(path=full_path_str)
+
+                          print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
+                          invalid_entries_count += 1
+                          continue
+                      full_path = Path(full_path_str)
+                      if not full_path.is_file():
+                          print(f"    Warning: Path '{full_path_str}' from {paths_file} not found on disk. Skipping.")
+                          invalid_entries_count += 1
+                          continue
+
+                      entry = {
+                          'filename': full_path.name,
+                          'path': str(full_path),
+                          'CE': score_data.get('CE', None),
+                          'CU': score_data.get('CU', None),
+                          'PC': score_data.get('PC', None),
+                          'PQ': score_data.get('PQ', None),
+                          **detect_mid_word_clips(full_path_str),
+                          **mid_word_data,
+                          "audio_length_seconds": mid_word_data.get("audio_length_seconds"),
+                      }
+                      all_data.append(entry)
+           except Exception as e:
+              print(f"    Error processing directory: {e}\n{traceback.format_exc()}")
+              invalid_entries_count += 1
 
     print(f"Scanned {subdirs_scanned} subdirectories.")
     if invalid_entries_count > 0:
@@ -454,6 +516,7 @@ class AudioReviewApp(tk.Tk):
         dir_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
         browse_button = ttk.Button(top_frame, text="Browse...", command=self.browse_directory)
         browse_button.pack(side=tk.LEFT, padx=5)
+        self.search_subdirs = tk.BooleanVar(value=True); subdirs_check = ttk.Checkbutton(top_frame, text="Data is in subdirectories", variable=self.search_subdirs); subdirs_check.pack(side=tk.LEFT, padx=5)
         load_button = ttk.Button(top_frame, text="Load Data", command=self.load_and_display_data)
         load_button.pack(side=tk.LEFT, padx=5)
         preprocess_button = ttk.Button(top_frame, text="Preprocess Options...", command=self.run_preprocessing_thread)
@@ -569,7 +632,7 @@ class AudioReviewApp(tk.Tk):
 
         start_time = time.time()
         try:
-            loaded_data, error_msg, subdir_count = load_audio_data(directory)
+            loaded_data, error_msg, subdir_count = load_audio_data(directory, self.search_subdirs.get())
             load_time = time.time() - start_time
 
             if loaded_data and len(loaded_data) > 100000:
