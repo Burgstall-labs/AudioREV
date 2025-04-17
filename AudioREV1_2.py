@@ -47,6 +47,12 @@ def load_audio_data(base_dir, search_subdirs):
     subdirs_scanned = 0
     invalid_entries_count = 0
 
+    def _update_status_callback(message):
+        """Helper callback to safely update the GUI status from load_audio_data."""
+        if hasattr(self, '_update_status'):  # Check if the method exists (if running in app context)
+            self._update_status(message)
+        print(message)  # Print to console anyway
+
     if search_subdirs:
         for item in os.listdir(base_dir):
             subdir_path = os.path.join(base_dir, item)
@@ -54,6 +60,11 @@ def load_audio_data(base_dir, search_subdirs):
                 subdirs_scanned += 1
                 paths_file = os.path.join(subdir_path, PATHS_FILENAME)
                 scores_file = os.path.join(subdir_path, SCORES_FILENAME)
+                
+                if subdirs_scanned == 1:
+                    _update_status_callback(f"Found {len(os.listdir(base_dir))} subdirectories. Scanning...")
+
+                _update_status_callback(f"Loading data from subdirectory: {item}")
 
                 if os.path.exists(paths_file) and os.path.exists(scores_file):
                     found_files_flag = True
@@ -107,6 +118,8 @@ def load_audio_data(base_dir, search_subdirs):
                     except Exception as e:
                         print(f"    Error processing subdirectory {item}: {e}\n{traceback.format_exc()}")
                         invalid_entries_count += 1 # Count errors during processing as invalid
+
+                _update_status_callback(f"Finished processing files in subdirectory: {item}")
     else:
         paths_file = os.path.join(base_dir, PATHS_FILENAME)
         scores_file = os.path.join(base_dir, SCORES_FILENAME)
@@ -135,11 +148,11 @@ def load_audio_data(base_dir, search_subdirs):
                     for path_data, score_data in zip(paths_content, scores_content):
                         full_path_str = path_data.get("path")
                         full_path = Path(full_path_str)
-                        
                         if not full_path_str:
                             print(f"    Warning: Missing 'path' key in {paths_file}. Skipping entry.")
                             invalid_entries_count += 1
                             continue
+
 
                         entry = {
                             'filename': full_path.name,
@@ -159,11 +172,12 @@ def load_audio_data(base_dir, search_subdirs):
                 print(f"    Error processing directory: {e}\n{traceback.format_exc()}")
                 invalid_entries_count += 1
 
-    print(f"Scanned {subdirs_scanned} subdirectories.")
+    print(f"Finished scanning {subdirs_scanned} subdirectories.")
+    _update_status_callback(f"Finished scanning {subdirs_scanned} subdirectories.")
     if invalid_entries_count > 0:
         print(f"Encountered {invalid_entries_count} invalid/missing entries during loading.")
 
-    if not found_files_flag and not all_data:
+    if not found_files_flag and not all_data and search_subdirs:
          return [], f"No subdirectories with '{PATHS_FILENAME}' and '{SCORES_FILENAME}' found or processed in {base_dir}.", subdirs_scanned
     elif not all_data and found_files_flag:
          return [], "Found subdirectories with jsonl files, but failed to load any valid audio entries (check paths and file existence).", subdirs_scanned
@@ -557,6 +571,10 @@ class AudioReviewApp(tk.Tk):
         self.filter_mid_word_start_var = tk.BooleanVar(); self.filter_mid_word_start = ttk.Checkbutton(filter_frame, text="Starts Mid-Word", variable=self.filter_mid_word_start_var); self.filter_mid_word_start.grid(row=0, column=6, padx=10, pady=2, sticky="w")
         self.filter_mid_word_end_var = tk.BooleanVar(); self.filter_mid_word_end = ttk.Checkbutton(filter_frame, text="Ends Mid-Word", variable=self.filter_mid_word_end_var); self.filter_mid_word_end.grid(row=0, column=7, padx=10, pady=2, sticky="w")
 
+        ttk.Label(filter_frame, text="Mid-Word Energy Threshold:").grid(row=3, column=0, padx=5, pady=2, sticky="w")
+        self.mid_word_energy_threshold = ttk.Entry(filter_frame, width=10); self.mid_word_energy_threshold.insert(0, "0.05"); self.mid_word_energy_threshold.grid(row=3, column=1, padx=5, pady=2, sticky="w")
+        ttk.Label(filter_frame, text="Mid-Word ZCR Threshold:").grid(row=3, column=2, padx=5, pady=2, sticky="w")
+        self.mid_word_zcr_threshold = ttk.Entry(filter_frame, width=10); self.mid_word_zcr_threshold.insert(0, "0.1"); self.mid_word_zcr_threshold.grid(row=3, column=3, padx=5, pady=2, sticky="w")
         filter_button_frame = ttk.Frame(filter_frame); filter_button_frame.grid(row=3, column=6, columnspan=4, pady=5, sticky="e")
         filter_button = ttk.Button(filter_button_frame, text="Apply Filters", command=self.apply_filters); filter_button.pack(side=tk.LEFT, padx=(15, 5))
         clear_filter_button = ttk.Button(filter_button_frame, text="Clear Filters", command=self.clear_filters); clear_filter_button.pack(side=tk.LEFT, padx=5)
@@ -666,11 +684,32 @@ class AudioReviewApp(tk.Tk):
         """
         Adds audio features (duration, mid-word) to the currently displayed data.
         """
+        
         if not self.display_audio_data:
             messagebox.showinfo("No Data", "No data loaded or visible. Please load and filter data first.", parent=self)
             return
 
         self._update_status("Analyzing audio features...")
+        energy_threshold_str = self.mid_word_energy_threshold.get()
+        zcr_threshold_str = self.mid_word_zcr_threshold.get()
+
+        # Check if the user entered a value for the energy threshold, and if it's a valid number
+        if energy_threshold_str:
+            try:
+                energy_threshold = float(energy_threshold_str)
+            except ValueError:
+                messagebox.showwarning("Filter Warning", "Mid-Word Energy Threshold must be a valid number.", parent=self)
+                return
+        else:
+            energy_threshold = 0.05  # Use default value if not provided
+        if zcr_threshold_str:
+            try:
+                zcr_threshold = float(zcr_threshold_str)
+            except ValueError:
+                messagebox.showwarning("Filter Warning", "Mid-Word ZCR Threshold must be a valid number.", parent=self)
+                return
+        else:
+            zcr_threshold = 0.1
         self.update_idletasks()  # Force GUI update
 
         analysis_start_time = time.time()
@@ -679,6 +718,13 @@ class AudioReviewApp(tk.Tk):
             analysis_time = time.time() - analysis_start_time
             self.populate_treeview() # Refresh the treeview to show new data
             self._update_status(f"Audio feature analysis completed in {analysis_time:.2f} seconds.  Data updated.")
+            self._append_log("Analysis done on filtered files")
+            
+            if energy_threshold != 0.05 or zcr_threshold != 0.1:
+                self._append_log(f"Analysis done with mid-word energy threshold: {energy_threshold}")
+                self._append_log(f"Analysis done with mid-word zcr threshold: {zcr_threshold}")
+            
+
         except Exception as e:
             self._update_status("Error during audio feature analysis.")
             messagebox.showerror("Analysis Error", f"An error occurred during analysis: {e}\n{traceback.format_exc()}", parent=self)
@@ -686,31 +732,6 @@ class AudioReviewApp(tk.Tk):
 
     def analyze_features(self):
         """
-        Adds audio features (duration, mid-word) to the currently displayed data.
-        """
-        if not self.display_audio_data:
-            messagebox.showinfo("No Data", "No data loaded or visible. Please load and filter data first.", parent=self)
-            return
-
-        self._update_status("Analyzing audio features...")
-        self.update_idletasks()  # Force GUI update
-
-        analysis_start_time = time.time()
-        try:
-            self.display_audio_data = add_audio_features(self.display_audio_data)
-            analysis_time = time.time() - analysis_start_time
-            self.populate_treeview() # Refresh the treeview to show new data
-            self._update_status(f"Audio feature analysis completed in {analysis_time:.2f} seconds.  Data updated.")
-        except Exception as e:
-            self._update_status("Error during audio feature analysis.")
-            messagebox.showerror("Analysis Error", f"An error occurred during analysis: {e}\n{traceback.format_exc()}", parent=self)
-            print(f"ANALYSIS ERROR: {e}\n{traceback.format_exc()}")
-
-    def _parse_filter_value(self, value_str):
-        """ Helper to parse float filter values, returns None if invalid/empty. """
-        if not value_str.strip(): return None
-        try: return float(value_str)
-        except ValueError: return None
 
     def apply_filters(self):
         """ Filters self.full_audio_data into self.display_audio_data based on GUI filter criteria and updates Treeview. """
@@ -726,8 +747,8 @@ class AudioReviewApp(tk.Tk):
         starts_mid_word_filter = self.filter_mid_word_start_var.get()
         ends_mid_word_filter = self.filter_mid_word_end_var.get()
 
-
-
+        def _parse_filter_value(self, value_str):
+            if not value_str.strip(): return None
         if pq_min is not None and pq_max is not None and pq_min > pq_max: messagebox.showwarning("Filter Warning", "PQ min value is greater than max value.", parent=self); return
         if ce_min is not None and ce_max is not None and ce_min > ce_max: messagebox.showwarning("Filter Warning", "CE min value is greater than max value.", parent=self); return
         if cu_min is not None and cu_max is not None and cu_min > cu_max: messagebox.showwarning("Filter Warning", "CU min value is greater than max value.", parent=self); return
